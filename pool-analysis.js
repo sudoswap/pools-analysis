@@ -9,15 +9,15 @@ const LINEAR_CURVE = '0x5B6aC51d9B1CeDE0068a1B26533CAce807f883Ee';
 const EXPONENTIAL_CURVE = '0x432f962D8209781da23fB37b6B59ee15dE7d9841';
 const abi = JSON.parse(await readFile("pool.json", "utf8"));
 
-// fill w/ alchemy node or other web3 provider like infura
 const web3 = new Web3("");
 
 // Pool values (fill these in with your own values)
 // This is the trade pool address you want to investigate
-const poolAddress = '0xD2a6D0280ff48CcBCD654d5D0Ecc45eF1e1cDBc3';
+const poolAddress = '';
 // This are the values set during pool creation
-const initialFee = (new BigNumber('10000000000000000')).div(new BigNumber(10**18));
-const initialDelta = new BigNumber('1015000000000000000');
+let initialDelta = new BigNumber('');
+const initialFee = (new BigNumber('')).div(new BigNumber(10**18));
+
 
 let contract = new web3.eth.Contract(abi, poolAddress);
 let curve = await contract.methods.bondingCurve().call();
@@ -27,6 +27,7 @@ if (curve.toLowerCase() === LINEAR_CURVE.toLowerCase()) {
 }
 else if (curve.toLowerCase() === EXPONENTIAL_CURVE.toLowerCase()) {
   curveType = 'EXPONENTIAL';
+  initialDelta = initialDelta.div(new BigNumber(10 ** 18));
 }
 else {
   throw console.error('Unknown curve');
@@ -97,7 +98,7 @@ if (deltaChanges.length === 0) {
   deltas.push({
     value: delta,
     block: 0
-  })
+  });
 }
 else {
   deltas.push({
