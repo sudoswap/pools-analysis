@@ -1,6 +1,7 @@
 import Web3 from 'web3';
 import { readFile } from 'fs/promises';
 import BigNumber from 'bignumber.js';
+import * as fs from 'fs';
 
 const TRANSFER_FROM_HASH = '0xddf252ad1be2c89b69c2b068fc378daa952ba7f163c4a11628f55a4df523b3ef';
 const NEW_SPOT_PRICE_HASH = '0xf06180fdbe95e5193df4dcd1352726b1f04cb58599ce58552cc952447af2ffbb';
@@ -9,11 +10,12 @@ const LINEAR_CURVE = '0x5B6aC51d9B1CeDE0068a1B26533CAce807f883Ee';
 const EXPONENTIAL_CURVE = '0x432f962D8209781da23fB37b6B59ee15dE7d9841';
 const abi = JSON.parse(await readFile("pool.json", "utf8"));
 
+// Bls don't overload my node, just fill w/ diff alchemy node
 const web3 = new Web3("");
 
 // Pool values (fill these in with your own values)
 // This is the trade pool address you want to investigate
-const poolAddress = '';
+const poolAddress = '0x8231FCe520B0b140F3f8d330619dCe36658417E6';
 // This are the values set during pool creation
 let initialDelta = new BigNumber('');
 const initialFee = (new BigNumber('')).div(new BigNumber(10**18));
@@ -127,9 +129,9 @@ let getLatestValue = ((values, block) => {
 });
 
 let buyCount = 0;
-let buyAmount = new BigNumber(0);
+let buyPrices = []
 let sellCount = 0;
-let sellAmount = new BigNumber(0);
+let sellPrices = [];
 for (let s of swaps) {
   let tx = await web3.eth.getTransactionReceipt(s.hash);
   let events = tx.logs;
@@ -169,12 +171,14 @@ for (let s of swaps) {
       else if (curveType === 'LINEAR') {
         spotPrice = spotPrice.plus(delta);
       }
-      buyAmount = buyAmount.plus(spotPrice.div(new BigNumber(new BigNumber(1).plus(fee))));
+      let buyPrice = spotPrice.div(new BigNumber(new BigNumber(1).plus(fee)));
+      buyPrices.push(buyPrice);
     }
   }
   else if (numSells > 0) {
     for (let i = 0; i < numSells; i++) {
-      sellAmount = sellAmount.plus(spotPrice.times(new BigNumber(new BigNumber(1).plus(fee))));
+      let sellPrice = spotPrice.times(new BigNumber(new BigNumber(1).plus(fee)));
+      sellPrices.push(sellPrice);
       if (curveType === 'EXPONENTIAL') {
         spotPrice = spotPrice.div(delta);
       }
@@ -184,6 +188,33 @@ for (let s of swaps) {
     }
   }
 }
+
+// Sort buy prices low to high
+buyPrices.sort((a, b) => {
+  return a.toNumber() - b.toNumber();
+});
+
+// Sort sell prices hihg to low
+sellPrices.sort((a, b) => {
+  return b.toNumber() - a.toNumber();
+});
+
+let buyAmount = new BigNumber(0);
+let sellAmount = new BigNumber(0);
+for (let b of buyPrices) {
+  buyAmount = buyAmount.plus(b);
+}
+for (let s of sellPrices) {
+  sellAmount = sellAmount.plus(s);
+}
+
+let totalSpreadFee = new BigNumber(0);
+for (let i = 0; i < Math.min(sellPrices.length, buyPrices.length); i++) {
+  let spread = sellPrices[i].minus(buyPrices[i]);
+  totalSpreadFee = totalSpreadFee.plus(spread);
+}
+totalSpreadFee = totalSpreadFee.div(new BigNumber(10**18));
+
 let scalingFactor = new BigNumber(Math.min(buyCount, sellCount));
 let avgBuyPrice = buyAmount.div(new BigNumber(buyCount)).div(new BigNumber(10**18));
 let avgSellPrice = sellAmount.div(new BigNumber(sellCount)).div(new BigNumber(10**18));
@@ -194,5 +225,6 @@ console.log(
   '\nSell Count ', sellCount, 
   '\nSell Amount (unscaled)', sellAmount.toString(),
   '\nAvg Sell Price (in ETH)', avgSellPrice.toString(),
-  '\nFees (in ETH)', scalingFactor.times(avgSellPrice.minus(avgBuyPrice)).toString()
+  '\nAvg Spread Earned (in ETH)', scalingFactor.times(avgSellPrice.minus(avgBuyPrice)).toString(),
+  '\nTotal Spread Earned (in ETH)', totalSpreadFee.toString()
 );
