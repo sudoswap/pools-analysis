@@ -15,7 +15,7 @@ const web3 = new Web3("");
 
 // Pool values (fill these in with your own values)
 // This is the trade pool address you want to investigate
-const poolAddress = '0x8231FCe520B0b140F3f8d330619dCe36658417E6';
+const poolAddress = '';
 // This are the values set during pool creation
 let initialDelta = new BigNumber('');
 const initialFee = (new BigNumber('')).div(new BigNumber(10**18));
